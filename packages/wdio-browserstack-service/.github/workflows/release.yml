@@ -1,0 +1,55 @@
+# ── RELEASE WORKFLOW (template) ───────────────────────────────────────────────
+# Template for the STANDALONE @wdio/browserstack-service repository.
+#
+# GitHub Actions only reads `.github/workflows` at a repository ROOT. While this
+# package still lives inside the WebdriverIO monorepo fork, this file is INERT and
+# will NOT run. When the package is lifted into its own repo, move this file to
+# `.github/workflows/release.yml` at that repo's root.
+#
+# Publishing uses npm "Trusted Publishing" (OIDC) — no long-lived NPM_TOKEN.
+# Configure it once on npmjs.com:
+#   @wdio/browserstack-service → Settings → Trusted Publisher → GitHub Actions
+#   → <owner>/<repo>, workflow file: release.yml
+# This must be done by an @wdio npm org admin (see EXTRACTION.md, Phase 0).
+# A classic-token fallback is shown commented out at the bottom.
+# ──────────────────────────────────────────────────────────────────────────────
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write # create the "Version Packages" PR and git tags
+  pull-requests: write # open the "Version Packages" PR
+  id-token: write # OIDC for npm trusted publishing + provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+      # Trusted Publishing (OIDC) requires npm >= 11.5.1
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Create Release PR or publish to npm
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version
+          publish: pnpm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+          # Fallback ONLY if Trusted Publishing is not configured (not recommended):
+          # NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

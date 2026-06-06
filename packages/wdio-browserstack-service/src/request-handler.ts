@@ -54,6 +54,9 @@ export default class RequestQueueHandler {
 
     startEventBatchPolling () {
         this.pollEventBatchInterval = setInterval(this.sendBatch.bind(this), DATA_BATCH_INTERVAL)
+        // Don't let the polling timer keep the Node event loop (or a test worker) alive
+        // on its own; it still fires on schedule while the process is otherwise running.
+        this.pollEventBatchInterval?.unref?.()
     }
 
     async sendBatch() {

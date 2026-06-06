@@ -1,0 +1,33 @@
+# ── CI WORKFLOW (template) ────────────────────────────────────────────────────
+# Template for the STANDALONE @wdio/browserstack-service repository. Inert inside
+# the monorepo fork (Actions only reads `.github/workflows` at a repo ROOT). Move
+# to `.github/workflows/ci.yml` at the new repo's root.
+#
+# Builds and tests against every Node version in the package's engines range and
+# across the supported `webdriverio` peer-dependency majors, since outside the
+# monorepo the package no longer gets the core packages' implicit compatibility.
+# ──────────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['18.20', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
