@@ -1,13 +1,10 @@
 {
-  "extends": "../../tsconfig.prod",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "outDir": "./build",
-    "rootDir": "./src",
-    "types": ["@wdio/globals/types"]
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": false
   },
-  "include": [
-    "src/**/*",
-    "../../@types"
-  ]
+  "exclude": ["node_modules", "build", "tests", "**/*.test.ts", "**/*.spec.ts"]
 }
