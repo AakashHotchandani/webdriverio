@@ -51,8 +51,15 @@ v9 line automatically covers v8 — no extra grant needed.
 ## Validated (PoC, 2026-06-09)
 Built the standalone v8 package off the registry (no monorepo) → `npm run build` (`tsc`) → `npm pack` → installed the tarball into a sample **as `@wdio/browserstack-service`** → resolved to the v8 build, **version 8.48.0**, `webdriverio` deduped to a single copy, and `import('@wdio/browserstack-service')` loaded cleanly (`default, launcher, log4jsAppender, PercySDK, BStackTestOpsLogger`). The three fixes above were found and applied during this rehearsal.
 
-## Remaining follow-ups (same as v9)
-- **Test wiring:** copy the v8 root `__mocks__` the suite needs (mirroring v9) so the standalone Vitest run is green; the build/release plumbing above does not depend on it.
+## Test wiring (done — parity with v9)
+The mocks the suite resolves by convention are copied into `__mocks__/`: `@wdio/logger`,
+`@wdio/reporter` (stats imported from the published package), `browserstack-local`, `fs`,
+`got`, `chalk`. v8 uses `got` (not a global `fetch`), so `vitest.config.ts` has no fetch
+setup file. Validated: a single file runs green standalone (`tests/bstackLogger.test.ts`,
+6/6). The **all-at-once** suite has the same teardown caveat as v9 (open handles in the
+service's lifecycle code) — a documented follow-up for the team, not a release blocker.
+
+## Remaining follow-ups
 - Set `repository.url` to the final repo before the first provenance-signed publish.
 - The fork's `v8` is at `3e62544`; sync with upstream `v8` (`cdbd52e` / 8.48.0) before a real cutover.
 
