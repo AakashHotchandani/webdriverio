@@ -29,10 +29,14 @@
     "./package.json": "./package.json"
   },
   "typeScriptVersion": "3.8.3",
+  "files": [
+    "build",
+    "browserstack-service.d.ts"
+  ],
   "scripts": {
     "clean": "rimraf ./build",
-    "build": "rimraf ./build && node ./scripts/build.mjs && tsc -p tsconfig.prod.json",
-    "build:watch": "node ./scripts/build.mjs --watch",
+    "build": "rimraf ./build && tsc -p tsconfig.prod.json",
+    "build:watch": "tsc -p tsconfig.prod.json --watch",
     "test": "vitest --run",
     "test:watch": "vitest",
     "version": "changeset version",
@@ -68,11 +72,12 @@
     "@changesets/cli": "^2.27.9",
     "@types/node": "^22.2.0",
     "@types/tar": "^6.1.13",
+    "@types/uuid": "^10.0.0",
+    "@types/yauzl": "^2.10.3",
     "@wdio/globals": "8.46.0",
     "@wdio/logger": "8.38.0",
     "@wdio/reporter": "8.43.0",
     "@wdio/types": "8.41.0",
-    "esbuild": "^0.21.5",
     "rimraf": "^5.0.7",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0",

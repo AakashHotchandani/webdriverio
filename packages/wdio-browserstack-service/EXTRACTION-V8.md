@@ -28,22 +28,28 @@ v9 line automatically covers v8 — no extra grant needed.
 
 | File | Change |
 |------|--------|
-| `package.json` | Moved `webdriverio 8.46.0` / `@wdio/types 8.41.0` / `@wdio/reporter 8.43.0` / `@wdio/logger 8.38.0` from `dependencies` → **`peerDependencies` (`^8.0.0`)** + `devDependencies`. Added build/test/release `scripts` and toolchain devDeps (`esbuild`, `typescript`, `rimraf`, `vitest`, `@changesets/cli`). **Added `publishConfig.tag: "v8"`.** Kept engines `^16.13 || >=18`, the `^5–^8` `@wdio/cli` peer, and the single `.` export. Repointed repository/homepage/bugs. |
+| `package.json` | Moved `webdriverio 8.46.0` / `@wdio/types 8.41.0` / `@wdio/reporter 8.43.0` / `@wdio/logger 8.38.0` from `dependencies` → **`peerDependencies` (`^8.0.0`)** + `devDependencies`. Added build/test/release `scripts` and toolchain devDeps (`typescript`, `rimraf`, `vitest`, `@changesets/cli`, **`@types/uuid`**, **`@types/yauzl`**). **Added `publishConfig.tag: "v8"`** and a **`files` allowlist** (`build` + the root types). Kept engines `^16.13 || >=18`, the `^5–^8` `@wdio/cli` peer, and the single `.` export. Repointed repository/homepage/bugs. |
 | `tsconfig.json` | Self-contained (inlined the options previously from `../../tsconfig.prod`; dropped `../../@types`). |
-| `tsconfig.prod.json` | Declaration-only emit (was extending the monorepo root). |
-| `scripts/build.mjs` | Standalone esbuild build — **single `index` entry** (v8 has no `./cleanup` export), `target: node16`, deps external. |
+| `tsconfig.prod.json` | **Emits JS + `.d.ts`** to `build/`, preserving the module structure (this IS the build — see below). |
+| build | **`tsc` (NOT esbuild)** — `npm run build` = `tsc -p tsconfig.prod.json`. The v8 monorepo builds with `tsc -b`, and v8 has a top-level-`await` inside a circular module graph that a single esbuild bundle can't express. Structure-preserving `tsc` output (matching published 8.48.0) is required. *(This is the biggest v8≠v9 difference: v9 builds via an esbuild single-file bundle; v8 must use `tsc`.)* |
 | `src/request-handler.ts` | `.unref()` the batch-polling `setInterval` (same lifecycle fix as v9). |
 | `.changeset/` | Independent versioning, `baseBranch: v8`. |
 | `.github/workflows/` | `ci.yml` (Node 16/18/20) + `release.yml` (on `v8`, OIDC, publishes the `v8` tag). |
-| `.npmignore`, `vitest.config.ts` | Lean tarball; standalone test config. |
+| `vitest.config.ts` | Standalone test config (mocks are the same follow-up as v9). |
 
 ## Key differences from the v9 extraction
 
-- **Node 16 still supported** (`engines: ^16.13 || >=18`) → build targets `node16`.
+- **Build tool: `tsc`, not esbuild.** v8's TLA-in-a-circular-graph breaks single-file bundling; the monorepo uses `tsc -b`, so the standalone v8 build does too. Output preserves the `src` tree under `build/`.
+- **Packaging via `files` allowlist, not `.npmignore`.** With a structure-preserving `tsc` build, `build/scripts/`, `build/cli/`, etc. exist — and an `.npmignore` `scripts` rule would (wrongly) drop `build/scripts/` because npmignore matches at any depth. A `files: ["build", …]` allowlist avoids that class of bug.
+- **Extra type deps** — `@types/uuid` (`uuid@10` has no bundled types; v9's `uuid@11` does) and `@types/yauzl`; the monorepo provided these via workspace hoisting.
+- **Node 16 still supported** (`engines: ^16.13 || >=18`).
 - **Single entrypoint** — v8 exports only `.` (no `./cleanup`); `src/cleanup.ts` exists but isn't a published export.
-- **Different deps** — v8 uses `got`/`formdata-node`/`glob ^10`/`tar ^6`/`uuid ^10` (vs v9's `undici`/`glob ^11`/`tar ^7`/`uuid ^11`); all external, unchanged by the extraction.
+- **Different ext deps** — `got`/`formdata-node`/`glob ^10`/`tar ^6`/`uuid ^10` (vs v9's `undici`/`glob ^11`/`tar ^7`/`uuid ^11`); all external, unchanged by the extraction.
 - **Peer ranges are `^8`** (and `@wdio/cli` stays `^5–^8`, no `^9`).
 - **Publishes to the `v8` dist-tag**, not `latest`.
+
+## Validated (PoC, 2026-06-09)
+Built the standalone v8 package off the registry (no monorepo) → `npm run build` (`tsc`) → `npm pack` → installed the tarball into a sample **as `@wdio/browserstack-service`** → resolved to the v8 build, **version 8.48.0**, `webdriverio` deduped to a single copy, and `import('@wdio/browserstack-service')` loaded cleanly (`default, launcher, log4jsAppender, PercySDK, BStackTestOpsLogger`). The three fixes above were found and applied during this rehearsal.
 
 ## Remaining follow-ups (same as v9)
 - **Test wiring:** copy the v8 root `__mocks__` the suite needs (mirroring v9) so the standalone Vitest run is green; the build/release plumbing above does not depend on it.
