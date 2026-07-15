@@ -68,7 +68,9 @@ import {
     validateCapsWithAppA11y,
     getAppA11yResults,
     isFalse,
-    setBrowserstackAnnotation
+    setBrowserstackAnnotation,
+    getHookType,
+    frameworkSupportsHook
 } from './util.js'
 import accessibilityScripts from './scripts/accessibility-scripts.js'
 import PerformanceTester from './instrumentation/performance/performance-tester.js'
@@ -88,6 +90,8 @@ class _AccessibilityHandler {
     private _autoScanning: boolean = true
     private _testIdentifier: string | null = null
     private _testMetadata: TestMetadata = {}
+    /* Set while a supported hook is executing; scans fired in this window are stamped with it. */
+    private _currentHookRunUuid: string | null = null
     private static _a11yScanSessionMap: A11yScanSessionMap = {}
     private _sessionId: string | null = null
     private listener = Listener.getInstance()
@@ -397,6 +401,54 @@ class _AccessibilityHandler {
         }
     }
 
+    /**
+     * Hook scans. A driver command executed inside a test hook (before/after,
+     * beforeEach/afterEach, cucumber hooks) should fire an accessibility scan and carry
+     * the hook's run UUID so the backend (SeleniumHub appAllyHandler -> app-accessibility)
+     * can reconcile it onto the wrapping test case instead of collapsing into a NULL row.
+     * `hookRunUuid` is the SAME uuid the SDK reports to TestHub as HookRunStarted
+     * (InsightsHandler.getCurrentHook), i.e. the hook's BTCER uuid.
+     * Additive: when hookRunUuid is absent, in-test scan behaviour is unchanged.
+     */
+    async beforeHook (test: Frameworks.Test | undefined, context: unknown, hookRunUuid?: string | null) {
+        try {
+            if (!this._accessibility || !this.shouldRunTestHooks(this._browser, this._accessibility)) {
+                return
+            }
+            // Only for frameworks/hooks that actually support hooks (mocha before/after/beforeEach/afterEach, cucumber).
+            if (!frameworkSupportsHook('before', this._framework)) {
+                return
+            }
+
+            // Scans fired until the matching afterHook belong to this hook.
+            this._currentHookRunUuid = hookRunUuid || null
+
+            // Enable scanning for the hook window (mocha). Per-test hooks honour the wrapped
+            // test's include/exclude scope; suite-level hooks fall back to autoScanning. The
+            // cucumber scan gate is owned by beforeScenario; we only add hook stamping there.
+            if (this._framework === 'mocha' && this._sessionId) {
+                let shouldScan = this._autoScanning
+                const hookType = (test && typeof test.title === 'string') ? getHookType(test.title) : 'unknown'
+                const wrappedTest = (context as { currentTest?: Frameworks.Test } | undefined)?.currentTest
+                if ((hookType === 'BEFORE_EACH' || hookType === 'AFTER_EACH') && wrappedTest) {
+                    let suiteTitle: unknown = wrappedTest.parent
+                    if (suiteTitle && typeof suiteTitle === 'object') {
+                        suiteTitle = (suiteTitle as { title?: string }).title
+                    }
+                    shouldScan = this._autoScanning && shouldScanTestForAccessibility(suiteTitle as string | undefined, wrappedTest.title, this._accessibilityOptions)
+                }
+                AccessibilityHandler._a11yScanSessionMap[this._sessionId] = shouldScan
+            }
+        } catch (error) {
+            BStackLogger.error(`Exception in accessibility automation beforeHook: ${error}`)
+        }
+    }
+
+    async afterHook (_test?: Frameworks.Test, _context?: unknown, _result?: Frameworks.TestResult, _hookRunUuid?: string | null) {
+        // Hook finished: subsequent (test-body) scans must not be stamped as hook scans.
+        this._currentHookRunUuid = null
+    }
+
     /*
      * private methods
      */
@@ -410,7 +462,7 @@ class _AccessibilityHandler {
                 )
         ) {
             BStackLogger.debug(`Performing scan for ${command.class} ${command.name}`)
-            await performA11yScan(this.isAppAutomate, this._browser, true, true, command.name)
+            await performA11yScan(this.isAppAutomate, this._browser, true, true, command.name, this._currentHookRunUuid)
         }
         return origFunction(...args)
     }
