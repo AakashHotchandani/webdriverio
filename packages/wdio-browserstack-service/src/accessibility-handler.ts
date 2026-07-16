@@ -444,7 +444,7 @@ class _AccessibilityHandler {
         }
     }
 
-    async afterHook (_test?: Frameworks.Test, _context?: unknown, _result?: Frameworks.TestResult, _hookRunUuid?: string | null) {
+    async afterHook () {
         // Hook finished: subsequent (test-body) scans must not be stamped as hook scans.
         this._currentHookRunUuid = null
     }
