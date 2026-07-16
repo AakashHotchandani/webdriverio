@@ -566,9 +566,12 @@ export const formatString = (template: (string | null), ...values: (string | nul
     })
 }
 
-export const _getParamsForAppAccessibility = ( commandName?: string ): { thTestRunUuid: any, thBuildUuid: any, thJwtToken: any, authHeader: any, scanTimestamp: Number, method: string | undefined  } => {
+export const _getParamsForAppAccessibility = ( commandName?: string, hookRunUuid?: string | null ): { thTestRunUuid: any, thHookRunUuid: any, thBuildUuid: any, thJwtToken: any, authHeader: any, scanTimestamp: Number, method: string | undefined  } => {
     return {
         'thTestRunUuid': process.env.TEST_ANALYTICS_ID,
+        // Present only when the scan fires inside a hook. Dropped by JSON.stringify when undefined,
+        // so in-test scans are byte-for-byte unchanged. SeleniumHub relays this as `hook_run_uuid`.
+        'thHookRunUuid': hookRunUuid || undefined,
         'thBuildUuid': process.env.BROWSERSTACK_TESTHUB_UUID,
         'thJwtToken': process.env.BROWSERSTACK_TESTHUB_JWT,
         'authHeader': process.env.BSTACK_A11Y_JWT,
@@ -577,7 +580,7 @@ export const _getParamsForAppAccessibility = ( commandName?: string ): { thTestR
     }
 }
 
-export const performA11yScan = async (isAppAutomate: boolean, browser: WebdriverIO.Browser | WebdriverIO.MultiRemoteBrowser, isBrowserStackSession?: boolean, isAccessibility?: boolean | string, commandName?: string) : Promise<{ [key: string]: any; } | undefined> => {
+export const performA11yScan = async (isAppAutomate: boolean, browser: WebdriverIO.Browser | WebdriverIO.MultiRemoteBrowser, isBrowserStackSession?: boolean, isAccessibility?: boolean | string, commandName?: string, hookRunUuid?: string | null) : Promise<{ [key: string]: any; } | undefined> => {
     return await PerformanceTester.measureWrapper(PERFORMANCE_SDK_EVENTS.A11Y_EVENTS.PERFORM_SCAN, async () => {
 
         if (!isAccessibilityAutomationSession(isAccessibility)) {
@@ -587,7 +590,7 @@ export const performA11yScan = async (isAppAutomate: boolean, browser: Webdriver
 
         try {
             if (isAppAccessibilityAutomationSession(isAccessibility, isAppAutomate)) {
-                const results: unknown = await (browser as WebdriverIO.Browser).execute(formatString(AccessibilityScripts.performScan, JSON.stringify(_getParamsForAppAccessibility(commandName))) as string, {})
+                const results: unknown = await (browser as WebdriverIO.Browser).execute(formatString(AccessibilityScripts.performScan, JSON.stringify(_getParamsForAppAccessibility(commandName, hookRunUuid))) as string, {})
                 BStackLogger.debug(util.format(results as string))
                 return ( results as { [key: string]: any; } | undefined )
             }
